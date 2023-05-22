@@ -6,9 +6,10 @@ pub trait Decode {
 
 pub trait Encode {
     fn to_base64(&self) -> String;
+    fn to_hex(&self) -> String;
 }
 
-impl Decode for &str {
+impl Decode for String {
     fn bytes_from_hex(&self) -> Result<Vec<u8>, ParseIntError> {
         (0..self.len())
             .step_by(2)
@@ -52,6 +53,13 @@ impl Encode for Vec<u8> {
         }
         base64
     }
+
+    fn to_hex(&self) -> String {
+        self.iter()
+            .map(|b| format!("{b:02x?}"))
+            .collect::<Vec<String>>()
+            .join("")
+    }
 }
 
 fn u8_to_base64(value: u8) -> char {
@@ -71,7 +79,7 @@ mod tests {
 
     #[test]
     fn test_bytes_from_hex() {
-        let initial = "00ff45";
+        let initial = String::from("00ff45");
         let expected: Vec<u8> = vec![0, 255, 69];
         assert_eq!(initial.bytes_from_hex().unwrap(), expected);
     }
@@ -80,5 +88,12 @@ mod tests {
     fn test_bytes_to_base64() {
         let initial: Vec<u8> = vec![73, 39, 109];
         assert_eq!(initial.to_base64(), String::from("SSdt"))
+    }
+
+    #[test]
+    fn test_bytes_to_hex() {
+        let initial: Vec<u8> = vec![0, 255, 69];
+        let expected = String::from("00ff45");
+        assert_eq!(initial.to_hex(), expected);
     }
 }
