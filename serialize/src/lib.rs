@@ -1,7 +1,6 @@
-use std::num::ParseIntError;
-
 pub trait Decode {
-    fn bytes_from_hex(&self) -> Result<Vec<u8>, ParseIntError>;
+    fn bytes_from_hex(&self) -> Vec<u8>;
+    fn bytes_from_base64(&self) -> Vec<u8>;
 }
 
 pub trait Encode {
@@ -10,11 +9,50 @@ pub trait Encode {
 }
 
 impl Decode for String {
-    fn bytes_from_hex(&self) -> Result<Vec<u8>, ParseIntError> {
+    fn bytes_from_hex(&self) -> Vec<u8> {
         (0..self.len())
             .step_by(2)
-            .map(|i| u8::from_str_radix(&self[i..i + 2], 16))
+            .map(|i| {
+                u8::from_str_radix(&self[i..i + 2], 16).expect("Could not convert bytes to hex")
+            })
             .collect()
+    }
+
+    fn bytes_from_base64(&self) -> Vec<u8> {
+        let mut n = self.len();
+        if self.as_bytes()[n - 1] == b'=' {
+            if self.as_bytes()[n - 2] == b'=' {
+                n -= 1;
+            }
+            n -= 1;
+        }
+
+        let mut nums = Vec::with_capacity(n);
+        for c in self.chars().take(n) {
+            nums.push(u8_from_base64(c));
+        }
+
+        let mut result = Vec::with_capacity(3 * n / 4);
+        for b in nums.chunks(4) {
+            result.push((b[0] << 2) + (b[1] >> 4));
+            if b.len() == 2 {
+                if b[1] << 4 != 0 {
+                    panic!("UHOH");
+                }
+                break;
+            }
+
+            result.push((b[1] << 4) + (b[2] >> 2));
+            if b.len() == 3 {
+                if b[2] << 6 != 0 {
+                    panic!("input not padded")
+                }
+                break;
+            }
+
+            result.push((b[2] << 6) + b[3]);
+        }
+        result
     }
 }
 
@@ -73,6 +111,17 @@ fn u8_to_base64(value: u8) -> char {
     }
 }
 
+fn u8_from_base64(value: char) -> u8 {
+    match value {
+        'A'..='Z' => value as u8 - b'A',
+        'a'..='z' => 26 + (value as u8 - b'a'),
+        '0'..='9' => 52 + (value as u8 - b'0'),
+        '+' => 62,
+        '/' => 63,
+        _ => panic!("base64 could not be convered to u8"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,7 +130,18 @@ mod tests {
     fn test_bytes_from_hex() {
         let initial = String::from("00ff45");
         let expected: Vec<u8> = vec![0, 255, 69];
-        assert_eq!(initial.bytes_from_hex().unwrap(), expected);
+        assert_eq!(initial.bytes_from_hex(), expected);
+    }
+
+    #[test]
+    fn test_bytes_from_base64() {
+        let initial = String::from("SSdt");
+        let initial_2 = String::from("SSdt=");
+        let initial_3 = String::from("SSdt==");
+        let expected = vec![73, 39, 109];
+        assert_eq!(initial.bytes_from_base64(), expected);
+        assert_eq!(initial_2.bytes_from_base64(), expected);
+        assert_eq!(initial_3.bytes_from_base64(), expected);
     }
 
     #[test]
